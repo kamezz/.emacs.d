@@ -1,0 +1,583 @@
+#+title: kamezz GNU Emacs
+#+startup: overview
+
+* Package manager
+
+Repositories.
+
+#+begin_src emacs-lisp
+  (require 'package)
+  (setq package-archives
+        '(("GNU ELPA" . "https://elpa.gnu.org/packages/")
+          ("MELPA Stable" . "https://stable.melpa.org/packages/")
+          ("Melpa" . "https://melpa.org/packages/"))
+        package-archive-priorities
+        '(("MELPA" . 30)
+          ("MELPA Stable" . 20)
+          ("GNU ELPA" . 10))
+        package-enable-at-startup nil
+        package-user-dir (expand-file-name (concat user-emacs-directory "elpa")))
+  (package-initialize)
+#+end_src
+
+#+RESULTS:
+
+[[https://github.com/jwiegley/use-package][use-package]]
+
+#+begin_src emacs-lisp
+      (unless (package-installed-p 'use-package)
+        (package-refresh-contents)
+        (package-install 'use-package))
+      (eval-when-compile
+        (require 'use-package))
+      (require 'bind-key) ; if you use any :bind variant
+#+end_src
+
+For use the package, here is a reminder reminder: ~(use-package <package>
+<extra options>)~
+
+Most important options:
+
+- :init :: One or multiple forms will follow this keyword, and this is
+  code that is going to be executed before loading the package.
+- :config :: One or more forms will follow this keyword, and this is
+  code that is going to be executed after loading the package.
+- :commands :: Unless this key is given, the package will always be
+  loaded as soon as you issue the use-package form. However, if this
+  option is used, it will be followed by either a symbol or a list of
+  symbols that should be treated as autoloads, which means that a stub
+  command will be created which, once called, will load the rest of the
+  plugin and replace the definition -- this is some form of defered
+  loading.
+- :bind :: This creates autocommands bound to a key, so pressing the key
+  will trigger the stub autoload that will load the rest of the plugin,
+  then replace the bind by whatever you really intended to do. Is
+  followed by a cons =("key" . command)=, or a list of conses.
+- :mode :: It will create an autocommand that will trigger when a file
+  whose name matches the given pattern is opened.
+- :interpreter :: It will create an autocommand that will trigger when a
+  file that has a shebang at the top of the file that matches the given
+  pattern is opened.
+- :hook :: It will create an autocommand that will get trigger using a
+  hook rule, whenever another mode is started.
+- :if :: Given a boolean primitive or evaluation, will only do the lazy
+  if the evaluation comes true.  For instance, to load something only on
+  graphical mode, or in a specific OS.
+- :after :: Defer loading a package until another package has loaded.
+  
+* Emacs internals
+** Diminish
+
+Removes minor modes from the modeline. Connect it with use-package via
+~:diminish t~
+
+#+begin_src emacs-lisp
+  (unless (package-installed-p 'diminish)
+    (package-refresh-contents)
+    (package-install 'diminish))
+  (require 'diminish)
+#+end_src
+
+** Exec-path-from-shell
+
+This sets $MANPATH, $PATH and exec-path from your shell, but only when
+executed in a GUI frame on OS X and Linux.
+
+#+begin_src emacs-lisp
+  (when (memq window-system '(mac ns x))
+    (use-package exec-path-from-shell
+      :if window-system
+      :ensure t
+      :config
+      (exec-path-from-shell-initialize)))
+#+end_src
+** Close all the buffers
+
+#+begin_src emacs-lisp
+  (defun kamezz/clean ()
+    (interactive)
+    (progn (mapc 'kill-buffer (buffer-list))
+           (delete-other-windows)))
+#+end_src
+
+** Macros configuration files
+
+The following macros will make it easier to open and reload this
+configuration file.
+
+As a side note: instead of reloading the configuration, it should be
+easier to evaluate an elisp sexp (S-expression).  This can be done using
+the C-x C-e chord with the cursor placed after something that can be
+evaluated (sexp).
+
+#+begin_src emacs-lisp
+  (defun kamezz/open-config ()
+    "Open in a new frame the contents of the emacs.org file"
+    (interactive)
+    (find-file-other-frame (expand-file-name "config.org" user-emacs-directory)))
+  (defun kamezz/reload-config ()
+    "Reloads the init.el dotfiles"
+    (interactive)
+    (load-file (expand-file-name "init.el" user-emacs-directory)))
+  (defalias 'dconf 'kamezz/open-config)
+#+end_src
+
+** Disable backup files
+
+#+begin_src emacs-lisp
+    (setq make-backup-files nil
+          auto-save-default nil
+          auto-save-list-file-prefix nil)
+#+end_src
+
+** Line numbers in mode line
+
+#+begin_src emacs-lisp
+  (line-number-mode)
+  (column-number-mode)
+#+end_src
+
+* Ergonomics
+** Relative numbers
+
+The following snippet will present relative numbers in programming
+modes.
+
+#+begin_src emacs-lisp
+  (add-hook 'prog-mode-hook 'display-line-numbers-mode)
+  (setq display-line-numbers-type 'relative)
+#+end_src
+
+Constant Font Size In ~display-line-numbers-mode~ When Zooming In And Out
+in with certain themes. [[https://emacs.stackexchange.com/questions/74507/constant-font-size-in-display-line-numbers-mode-when-zooming-in-and-out][SOLVED]]
+
+Customization Browser ~M-x customize-browse~
+
+"I set the inherit option in my line-number face (Environment > Display
+> Display Line Numbers > Line Number) to default (The Default face) and
+everything worked, no matter how I customized the other options."
+
+** Quick new line
+
+Similar to Vim motions, the following snippet will define two new
+bindings:
+
+- C-RET :: Insert a line below this one and move the cursor there.
+- C-S-RET :: Insert a line above this one and move the cursor there.
+
+#+begin_src emacs-lisp
+  (defun new-line-below ()
+    "Insert a new line below this one and jump there"
+    (interactive)
+    (end-of-line)
+    (newline-and-indent))
+  (defun new-line-above ()
+    "Insert a new line on top of this one and jump there"
+    (interactive)
+    (beginning-of-line)
+    (newline-and-indent)
+    (previous-line))
+  (global-set-key (kbd "<C-return>") 'new-line-below)
+  (global-set-key (kbd "<C-S-return>") 'new-line-above)
+#+end_src
+
+** Window management
+
+=ace-window= package.
+
+#+begin_src emacs-lisp
+  (use-package ace-window
+    :ensure t
+    :bind (("C-x o" . ace-window)))
+#+end_src
+
+rotate package.
+
+#+begin_src emacs-lisp
+  (use-package rotate
+    :ensure t
+    :bind (("C-|" . rotate-layout))
+    :commands (rotate-layout rotate-window))
+#+end_src
+
+kill-buffer-and-window to another key binding.
+
+#+begin_src emacs-lisp
+  (global-set-key (kbd "C-x C-k") 'kill-buffer-and-window)
+#+end_src
+
+* Look and feel
+** Graphical enviroment
+
+Remove window elements.
+
+#+begin_src emacs-lisp
+  (when window-system
+    (tool-bar-mode -1)
+    (menu-bar-mode -1)
+    (scroll-bar-mode -1))
+#+end_src
+
+** Themes
+
+#+begin_src emacs-lisp
+  (use-package color-theme-sanityinc-tomorrow
+    :if window-system
+    :ensure t)
+  (use-package vscode-dark-plus-theme
+    :if window-system
+    :ensure t)
+  (use-package darktooth-theme
+    :if window-system
+    :ensure t)
+  (use-package srcery-theme
+    :if window-system
+    :ensure t)
+  (use-package atom-one-dark-theme
+    :if window-system
+    :ensure t)
+  
+  (load-theme 'atom-one-dark)
+#+end_src
+
+Toggle highlighting of the current line.
+
+#+begin_src emacs-lisp
+  ;; (hl-line-mode)
+  ;; (global-hl-line-mode 1)
+#+end_src
+
+Olivetti package aligning text to center.
+
+#+begin_src emacs-lisp
+  (use-package olivetti
+    :if window-system
+    :ensure t
+    :disabled t
+    :hook ((text-mode . olivetti-mode)
+           (org-mode . olivetti-mode)))
+#+end_src
+
+* Misc
+** Nyan cat mode
+
+#+begin_src emacs-lisp
+  (use-package nyan-mode
+    :ensure t
+    :config
+    (nyan-mode)
+    (nyan-start-animation)
+    (setq nyan-animate-nyancat t
+          nyan-wavy-trail t))
+#+end_src
+
+* Text mode
+
+#+begin_src emacs-lisp
+(add-hook 'text-mode-hook 'auto-fill-mode)
+(setq-default fill-column 72)
+#+end_src
+
+* Auth-Source
+
+Encrypt .authinfo for auth-source framework.
+
+#+begin_src emacs-lisp
+  (setq auth-sources
+        '((:source "~/.emacs.d/authinfo.gpg"
+                   auth-source-debug t)))
+#+end_src
+
+* Treemacs
+
+Treemacs presents a tree similar to NERDTree.
+
+#+begin_src emacs-lisp
+  (use-package treemacs
+    :ensure t
+    :bind (("C-c t t" . treemacs-select-window)
+           ("C-c t 0" . treemacs-delete-other-windows)
+           ("C-c t C-t" . treemacs-find-file))
+    :config
+    (setq treemacs-position 'left
+          treemacs-follow-after-init t)
+    (treemacs-resize-icons 16)
+    (treemacs-follow-mode t)
+    (treemacs-filewatch-mode t))
+#+end_src
+
+* Magit
+
+Magit is a tool that interacts with Git repositories.  It leverages the
+integrated VCS functionality present in GNU Emacs and does a lot of
+things that not many Git clients can do, such as handling hunks.  It
+also has a pretty user manual that is very long and that I wish to read
+at some point.
+
+#+begin_src emacs-lisp
+  (use-package magit
+    :ensure t
+    :bind (("C-c g" . magit-status)
+           ("C-c M-g" . magit-dispatch))
+    :config
+    (setq magit-save-repository-buffers nil))
+#+end_src
+
+Support for treemacs.
+
+#+begin_src emacs-lisp
+  (use-package treemacs-magit
+    :ensure t
+    :after (magit treemacs))
+#+end_src
+
+Git Gutters.
+
+#+begin_src emacs-lisp
+  (use-package git-gutter
+    :ensure t
+    :diminish git-gutter-mode
+    :config
+    (global-git-gutter-mode))
+#+end_src
+
+* Org-mode and Org-roam
+** Org-mode
+
+Some interesting facts about Org-mode.
+
+There is an operation in Org mode called org-edit-special. You can use
+this to extract the snippet of code where the cursor is in, into a
+separate buffer, that you can use to edit separately: ~C-c '~
+
+Then you can save your thing with ~C-c '~ again, and it will be updated in
+the original buffer. I’m using this in this very own file to modify and
+update each snippet separately without surrounding text neaby.
+
+Minor modes.
+
+#+begin_src emacs-lisp
+  (use-package org
+    :ensure t
+    :hook (org-mode . org-indent-mode)
+    :config
+    (setq org-hide-emphasis-markers t))
+  (use-package org-bullets
+    :after org
+    :ensure t
+    :hook (org-mode . org-bullets-mode))
+#+end_src
+
+Configuration parameters.
+
+#+begin_src emacs-lisp
+  (setq org-agenda-files
+        (file-expand-wildcards (concat org-directory "*.org")))
+  (defun kamezz/visit-org ()
+    (interactive)
+    (helm-find-files-1 org-directory))
+
+  (defalias 'myorg 'kamezz/visit-org)
+  (global-set-key (kbd "C-c d") 'kamezz/visit-org)
+#+end_src
+
+** Agenda and capturing key bindings
+
+#+begin_src emacs-lisp
+  (global-set-key (kbd "C-c l") #'org-store-link)
+  (global-set-key (kbd "C-c a") #'org-agenda)
+  (global-set-key (kbd "C-c c") #'org-capture)
+#+end_src
+
+** Org-roam
+
+Similar to vimwiki in Vim.
+
+#+begin_src emacs-lisp
+  (use-package org-roam
+    :ensure t
+    :config
+    (setq org-roam-directory (file-truename "~/org-roam"))
+    (org-roam-db-autosync-mode))
+#+end_src
+
+* EditorConfig
+
+#+begin_src emacs-lisp
+  (use-package editorconfig
+    :ensure t
+    :hook ((prog-mode . editorconfig-mode))
+    :diminish editorconfig-mode)
+#+end_src
+
+* Flycheck
+
+Flycheck performs syntax checking, and it is the tool to use for
+highlight errors and other linting issues that are important when
+writing code.  However, it should be possible to also use Flycheck for
+things like spellcheckin.
+
+#+begin_src emacs-lisp
+  (use-package flycheck
+    :ensure t
+    :diminish t
+    :config
+    (global-flycheck-mode))
+
+  (use-package flycheck-pos-tip
+    :ensure t
+    :diminish t
+    :after flycheck
+    :hook ((flycheck-mode . flycheck-pos-tip-mode)))
+#+end_src
+
+* LSP
+
+The language server protocol allows to have nice autocompletions,
+refactors and error detections on a lot of programming languages.  It is
+decoupled, so I can take advantage of any other language server written
+for a specific programming language without requiring it to support the
+text editor I am using.  At the same time, I can use the same plugin to
+provide a LSP framework for any supported programming language.
+
+The LSP in Emacs is provided by LSP.
+
+#+begin_src emacs-lisp
+  (use-package lsp-mode
+    :ensure t
+    :after flycheck
+    :init
+    (setq lsp-keymap-prefix "M-l")
+    :hook ((c-mode) . lsp))
+#+end_src
+
+For the fancy user interface, LSP-UI is used.
+
+#+begin_src emacs-lisp
+  (use-package lsp-ui
+    :ensure t
+    :after lsp-mode
+    :commands lsp-ui-mode)
+#+end_src
+
+Integration with lsp-treemacs:
+
+#+begin_src emacs-lisp
+  (use-package lsp-treemacs
+    :ensure t
+    :after lsp-mode treemacs
+    :commands lsp-treemacs-errors-list)
+#+end_src
+
+And integration with Helm:
+
+#+begin_src emacs-lisp
+  (use-package helm-lsp
+    :ensure t
+    :commands helm-lsp-workspace-symbol)
+#+end_src
+
+* Company
+
+Company is a completion framework.  LSP will take advantage of Company
+if enabled, but Company can also be used standalone of LSP.  For
+instance, when editing ELisp files it will use the native facilities
+provided by GNU Emacs to complete things.
+
+#+begin_src emacs-lisp
+  (use-package company
+    :ensure t
+    :diminish company-mode
+    :bind (("C-c SPC" . company-complete))
+    :config
+    (global-company-mode))
+#+end_src
+
+* Helm
+
+Helm completion framework.
+
+#+begin_src emacs-lisp
+  (use-package helm
+    :ensure t
+    :diminish helm-mode
+    :init (helm-mode t)
+    :bind (("M-x" . helm-M-x)
+           ("C-x C-f" . helm-find-files)
+           ("C-x b" . helm-buffers-list)
+           ("C-h a" . helm-apropos)
+           ("M-y" . helm-show-kill-ring)))
+#+end_src
+
+* Projectile
+
+Projectile manages projects.  A project is considered a directory that
+contains source code files related to a main library or executable.  The
+idea is that when you want to work on a repository or a website you
+start a project for that repository.
+
+Projects allow to avoid losing focus when you open subdirectories, for
+instance.
+
+The main layer is provided by projectile itself.
+
+#+begin_src emacs-lisp
+  (use-package projectile
+    :ensure t
+    :diminish projectile-mode
+    :init
+    (setq projectile-project-search-path '("~/projects"))
+    :config
+    (projectile-mode)
+    (projectile-add-known-project "~/.emacs.d")
+    (projectile-add-known-project "~/.dotfiles")
+    :bind-keymap ("C-c p" . projectile-command-map))
+
+    (use-package helm-projectile
+    :ensure t
+    :after projectile helm
+    :config
+    (helm-projectile-on)
+    (setq projectile-completion-system 'helm))
+
+  (use-package treemacs-projectile
+    :ensure t
+    :after treemacs projectile
+    :bind (:map projectile-command-map ("h" . treemacs-projectile)))
+#+end_src
+
+* Emacs dashboard
+
+#+begin_src emacs-lisp
+    (use-package dashboard
+      :ensure t
+      :init
+      (setq dashboard-banner-logo-title nil)
+      (setq dashboard-startup-banner 'logo)
+      (setq dashboard-items '((projects . 5)
+                              (recents  . 5)))
+      :config
+      (dashboard-setup-startup-hook))
+#+end_src
+
+* Evil mode
+
+#+begin_src emacs-lisp
+(use-package evil
+  :ensure t)
+#+end_src
+
+* Programming languages support
+** C/C++
+
+Add support for clang-format where available.
+
+#+begin_src emacs-lisp
+  (use-package clang-format
+    :ensure t)
+  (use-package clang-format+
+    :ensure t
+    :hook (c-mode-common . clang-format+-mode))
+#+end_src
+
+* ERC (Emacs IRC client)
